@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.IO;
@@ -314,14 +315,20 @@ namespace Nop.Services.ExportImport
 
                 //performance optimization, load all pictures hashes
                 IDictionary<int, string> allPicturesHashes = null;
-                var productsImagesIds = _productService.GetProductsImagesIds(allProductsBySku.Select(p => p.Id).ToArray());
-                try
+                IDictionary<int, int[]> productsImagesIds = null;
+                if (_pictureService.StoreInDb)
                 {
-                    allPicturesHashes = _pictureService.GetPicturesHash(productsImagesIds.SelectMany(p=>p.Value).ToArray());
-                }
-                catch(Exception ex)
-                {
-                    Debug.Write(ex.Message);
+                    productsImagesIds = _productService.GetProductsImagesIds(allProductsBySku.Select(p => p.Id).ToArray());
+                    try
+                    {
+                        allPicturesHashes = _pictureService.GetPicturesHash(productsImagesIds.SelectMany(p => p.Value).ToArray());
+                    }
+                    //suppression Sql compact exception
+                    catch (DbException ex)
+                    {
+                        if (ex.GetType().Name != "SqlCeException")
+                            throw;
+                    }
                 }
 
                 //performance optimization, load all categories IDs for products in one SQL request
@@ -518,13 +525,14 @@ namespace Nop.Services.ExportImport
                             //performance optimization, comparison pictures by hash
                             else
                             {
-                                var newImageHash = _encryptionService.CreateHash(newPictureBinary);
+                                var newImageHash = _encryptionService.CreateHash(newPictureBinary.Take(7999).ToArray());
+                                var newValidatedImageHash = _encryptionService.CreateHash(_pictureService.ValidatePicture(newPictureBinary, mimeType).Take(7999).ToArray());
 
                                 var imagesIds = productsImagesIds.ContainsKey(product.Id)
                                     ? productsImagesIds[product.Id]
                                     : new int[0];
 
-                                pictureAlreadyExists = allPicturesHashes.Where(p => imagesIds.Contains(p.Key)).Select(p => p.Value).Any(p => p == newImageHash);
+                                pictureAlreadyExists = allPicturesHashes.Where(p => imagesIds.Contains(p.Key)).Select(p => p.Value).Any(p => p == newImageHash || p == newValidatedImageHash);
                             }
                         }
 

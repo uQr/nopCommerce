@@ -154,6 +154,11 @@ namespace Nop.Services.Media
         /// </summary>
         bool StoreInDb { get; set; }
 
+        /// <summary>
+        /// Get pictures hashes
+        /// </summary>
+        /// <param name="picturesIds">Pictures Ids</param>
+        /// <returns></returns>
         IDictionary<int, string> GetPicturesHash(int [] picturesIds);
     }
 }

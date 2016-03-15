@@ -782,9 +782,28 @@ namespace Nop.Services.Media
             }
         }
 
+        /// <summary>
+        /// Helper class for making pictures hashes from DB
+        /// </summary>
+        private class HashItem
+        {
+            public int PictureId { get; set; }
+            public byte[] Hash { get; set; }
+        }
+
+        /// <summary>
+        /// Get pictures hashes
+        /// 
+        /// Use T-SQL function HASHBYTES. It is missing in SQL CE.
+        /// The HASHBYTES function has a limit on the length of the data to compute the sum. For SQL Server 2008 and above is 8000 characters.
+        /// </summary>
+        /// <param name="picturesIds">Pictures Ids</param>
+        /// <returns></returns>
         public IDictionary<int, string> GetPicturesHash(int[] picturesIds)
         {
-            return _dbContext.SqlQuery<SimpleItem>("SELECT [Id], HASHBYTES('sha1', sys.fn_repl_hash_binary([PictureBinary])) as [hash] FROM [Picture] where id in (@ids)", picturesIds).ToDictionary(p=>p.Id, p=>p.Hash);
+            const string strCommand = "SELECT [Id], HASHBYTES('sha1', substring([PictureBinary], 0, 8000)) as [Hash] FROM [Picture] where id in ({0})";
+            return _dbContext.SqlQuery<HashItem>(String.Format(strCommand, picturesIds.Select(p => p.ToString()).Aggregate((all, current) => all + ", " + current)))
+                .ToDictionary(p => p.PictureId, p => BitConverter.ToString(p.Hash).Replace("-", ""));
         }
 
         #endregion
@@ -872,10 +891,6 @@ namespace Nop.Services.Media
         #endregion
     }
 
-    class SimpleItem
-    {
-        public int Id { get; set; }
-        public string Hash { get; set; }
-    }
+    
 
 }
