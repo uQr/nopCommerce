@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.Eventing.Reader;
 using System.IO;
 using System.Linq;
 using System.Web;
@@ -15,6 +16,7 @@ using Nop.Services.Directory;
 using Nop.Services.ExportImport.Help;
 using Nop.Services.Media;
 using Nop.Services.Messages;
+using Nop.Services.Security;
 using Nop.Services.Seo;
 using OfficeOpenXml;
 
@@ -36,6 +38,7 @@ namespace Nop.Services.ExportImport
         private readonly INewsLetterSubscriptionService _newsLetterSubscriptionService;
         private readonly ICountryService _countryService;
         private readonly IStateProvinceService _stateProvinceService;
+        private readonly IEncryptionService _encryptionService;
 
         #endregion
 
@@ -49,7 +52,8 @@ namespace Nop.Services.ExportImport
             IStoreContext storeContext,
             INewsLetterSubscriptionService newsLetterSubscriptionService,
             ICountryService countryService,
-            IStateProvinceService stateProvinceService)
+            IStateProvinceService stateProvinceService,
+            IEncryptionService encryptionService)
         {
             this._productService = productService;
             this._categoryService = categoryService;
@@ -60,6 +64,7 @@ namespace Nop.Services.ExportImport
             this._newsLetterSubscriptionService = newsLetterSubscriptionService;
             this._countryService = countryService;
             this._stateProvinceService = stateProvinceService;
+            this._encryptionService = encryptionService;
         }
 
         #endregion
@@ -307,6 +312,18 @@ namespace Nop.Services.ExportImport
                 //performance optimization, load all products by SKU in one SQL request
                 var allProductsBySku = _productService.GetProductsBySku(allSku.ToArray());
 
+                //performance optimization, load all pictures hashes
+                IDictionary<int, string> allPicturesHashes = null;
+                var productsImagesIds = _productService.GetProductsImagesIds(allProductsBySku.Select(p => p.Id).ToArray());
+                try
+                {
+                    allPicturesHashes = _pictureService.GetPicturesHash(productsImagesIds.SelectMany(p=>p.Value).ToArray());
+                }
+                catch(Exception ex)
+                {
+                    Debug.Write(ex.Message);
+                }
+
                 //performance optimization, load all categories IDs for products in one SQL request
                 var allProductsCategoryIds = _categoryService.GetProductCategoryIds(allProductsBySku.Select(p => p.Id).ToArray());
 
@@ -482,18 +499,32 @@ namespace Nop.Services.ExportImport
                         var pictureAlreadyExists = false;
                         if (!isNew)
                         {
-                            //compare with existing product pictures
-                            var existingPictures = _pictureService.GetPicturesByProductId(product.Id);
-                            foreach (var existingPicture in existingPictures)
+                            if (allPicturesHashes == null)
                             {
-                                var existingBinary = _pictureService.LoadPictureBinary(existingPicture);
-                                //picture binary after validation (like in database)
-                                var validatedPictureBinary = _pictureService.ValidatePicture(newPictureBinary, mimeType);
-                                if (!existingBinary.SequenceEqual(validatedPictureBinary) && !existingBinary.SequenceEqual(newPictureBinary))
-                                    continue;
-                                //the same picture content
-                                pictureAlreadyExists = true;
-                                break;
+                                //compare with existing product pictures
+                                var existingPictures = _pictureService.GetPicturesByProductId(product.Id);
+                                foreach (var existingPicture in existingPictures)
+                                {
+                                    var existingBinary = _pictureService.LoadPictureBinary(existingPicture);
+                                    //picture binary after validation (like in database)
+                                    var validatedPictureBinary = _pictureService.ValidatePicture(newPictureBinary, mimeType);
+                                    if (!existingBinary.SequenceEqual(validatedPictureBinary) && !existingBinary.SequenceEqual(newPictureBinary))
+                                        continue;
+                                    //the same picture content
+                                    pictureAlreadyExists = true;
+                                    break;
+                                }
+                            }
+                            //performance optimization, comparison pictures by hash
+                            else
+                            {
+                                var newImageHash = _encryptionService.CreateHash(newPictureBinary);
+
+                                var imagesIds = productsImagesIds.ContainsKey(product.Id)
+                                    ? productsImagesIds[product.Id]
+                                    : new int[0];
+
+                                pictureAlreadyExists = allPicturesHashes.Where(p => imagesIds.Contains(p.Key)).Select(p => p.Value).Any(p => p == newImageHash);
                             }
                         }
 

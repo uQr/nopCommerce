@@ -39,16 +39,20 @@ namespace Nop.Services.Security
         /// <returns>Password hash</returns>
         public virtual string CreatePasswordHash(string password, string saltkey, string passwordFormat = "SHA1")
         {
+            return CreateHash(Encoding.UTF8.GetBytes(String.Concat(password, saltkey)), passwordFormat);
+        }
+
+        public virtual string CreateHash(byte[] data, string passwordFormat = "SHA1")
+        {
             if (String.IsNullOrEmpty(passwordFormat))
                 passwordFormat = "SHA1";
-            string saltAndPassword = String.Concat(password, saltkey);
-
+           
             //return FormsAuthentication.HashPasswordForStoringInConfigFile(saltAndPassword, passwordFormat);
             var algorithm = HashAlgorithm.Create(passwordFormat);
             if (algorithm == null)
                 throw new ArgumentException("Unrecognized hash name");
 
-            var hashByteArray = algorithm.ComputeHash(Encoding.UTF8.GetBytes(saltAndPassword));
+            var hashByteArray = algorithm.ComputeHash(data);
             return BitConverter.ToString(hashByteArray).Replace("-", "");
         }
 

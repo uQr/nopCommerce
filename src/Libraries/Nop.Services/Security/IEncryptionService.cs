@@ -19,6 +19,8 @@ namespace Nop.Services.Security
         /// <returns>Password hash</returns>
         string CreatePasswordHash(string password, string saltkey, string passwordFormat = "SHA1");
 
+        string CreateHash(byte [] data, string passwordFormat = "SHA1");
+
         /// <summary>
         /// Encrypt text
         /// </summary>

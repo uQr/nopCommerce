@@ -440,6 +440,9 @@ namespace Nop.Services.Catalog
         /// <param name="productPicture">Product picture</param>
         void UpdateProductPicture(ProductPicture productPicture);
 
+
+        IDictionary<int, int[]> GetProductsImagesIds(int [] productsIds);
+
         #endregion
 
         #region Product reviews

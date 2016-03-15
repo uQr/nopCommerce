@@ -782,6 +782,11 @@ namespace Nop.Services.Media
             }
         }
 
+        public IDictionary<int, string> GetPicturesHash(int[] picturesIds)
+        {
+            return _dbContext.SqlQuery<SimpleItem>("SELECT [Id], HASHBYTES('sha1', sys.fn_repl_hash_binary([PictureBinary])) as [hash] FROM [Picture] where id in (@ids)", picturesIds).ToDictionary(p=>p.Id, p=>p.Hash);
+        }
+
         #endregion
 
         #region Properties
@@ -866,4 +871,11 @@ namespace Nop.Services.Media
 
         #endregion
     }
+
+    class SimpleItem
+    {
+        public int Id { get; set; }
+        public string Hash { get; set; }
+    }
+
 }

@@ -1867,6 +1867,12 @@ namespace Nop.Services.Catalog
             _eventPublisher.EntityUpdated(productPicture);
         }
 
+        public IDictionary<int, int[]> GetProductsImagesIds(int [] productsIds)
+        {
+            return _productPictureRepository.Table.Where(p => productsIds.Contains(p.ProductId))
+                .GroupBy(p => p.PictureId).ToDictionary(p => p.Key, p => p.Select(p1 => p1.PictureId).ToArray());
+        }
+
         #endregion
 
         #region Product reviews
